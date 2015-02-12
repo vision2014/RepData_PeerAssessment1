@@ -1,0 +1,176 @@
+---
+title: 'Reproducible Research: Peer Assignment 1'
+author: "Divine Miho"
+date: "Wednesday, February 11, 2015"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figs/',
+                      echo=TRUE, warning=FALSE, message=FALSE)
+```
+
+Set the working directory
+
+```{r}
+setwd("~/Coursera/Reproducible_Research")
+```
+
+Load the required packages
+
+```{r}
+library(stats)
+library(plyr)
+library(lattice)
+```
+
+Load and manipulate the data
+
+```{r}
+dat <- read.csv("activity.csv")
+```
+
+Process/transform the data to a suitable format
+
+```{r}
+dat$date <- as.Date(dat$date, "%Y-%m-%d")
+```
+
+Summarize the dependent variable of interest, steps
+
+```{r}
+summary(dat$steps)
+```
+
+Total number of steps per day
+
+```{r}
+sum(dat$steps, na.rm=TRUE)
+```
+
+Histogram of the total number of steps taken each day
+
+```{r}
+totStps <-aggregate(dat$steps, by=list(dat$date), FUN=sum)
+colnames(totStps) <- c("Date","total_steps")
+
+h<-hist(totStps$total_steps, breaks=30, col="red", 
+        xlab="Total Steps", 
+        main="Histogram of Total Steps Taken Each Day")
+```
+
+Mean of the total steps taken each day
+
+```{r}
+mean(totStps$total_steps,na.rm = TRUE)
+```
+
+Median of the total steps taken each day
+
+```{r}
+median(totStps$total_steps,na.rm = TRUE)
+```
+
+Time series plot of five minute intervals and average number of steps taken
+
+Get the data
+
+```{r}
+aveStps <-aggregate(dat$steps, by=list(dat$interval), FUN=mean, na.rm= TRUE)
+colnames(aveStps) <- c("interval","ave_steps")
+with(aveStps, plot(interval,ave_steps, type = "l",
+                   main = "Average steps by time intervals",
+                   xlab = "Time intervals (minutes)",
+                   ylab = "Average steps across all days"))
+```
+
+The five minute interval with the maximum numer of steps, on average
+
+```{r}
+which.max(aveStps[,2])
+maxInt <- aveStps[aveStps$ave_steps == max(aveStps$ave_steps),]
+```
+
+Interval with max average total steps is `r maxInt[[1]]`
+
+Since the data has missing values, I will be doing some imputation
+
+I am replacing the missing values with the average total steps by interval
+
+Count the number of rows with missing values
+
+```{r}
+sum(is.na(dat$steps))
+```
+
+Imputation
+
+```{r}
+impute.mean <- function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))
+dat2 <- ddply(dat, ~ interval, transform, steps = impute.mean(steps))
+dat2 <- with(dat2, dat2[order(date,interval),])
+```
+
+Inorder to create a histogram, I need to aggregate steps by day
+
+```{r}
+totStps2 <-aggregate(dat2$steps, by=list(dat2$date), FUN=sum)
+colnames(totStps2) <- c("Date","total_steps")
+```
+
+Histogram of the total number of steps taken each day
+
+```{r}
+h2<-hist(totStps2$total_steps, breaks=30, col="red", 
+         xlab="Total Steps", 
+         main="Histogram of Total Steps Taken Each Day")
+```
+
+I am plotting the two histograms together to see if the imputation
+made any difference to the distribution
+
+```{r}
+hist(totStps$total_steps, col=rgb(1,0,0,0.5),breaks = 30,
+     xlab="Total Steps", main="Histogram of Total Steps Taken Each Day")
+hist(totStps2$total_steps, breaks = 30, col=rgb(0,0,1,0.5), add=T)
+box()
+```
+
+Compare the means and medians with and without the imputation
+
+```{r}
+s1 <- summary(totStps2$total_steps)
+m1 <- s1[[4]]
+md1 <- s1[[3]]
+s2 <- summary(totStps$total_steps)
+m2 <- s2[[4]]
+md2 <- s2[[3]]
+```
+
+cat("Before the imputation, the mean was", `r m1`,
+    "and after imputation, the mean is", `r m2`)
+
+cat("Before the imputation, the median was", `r md1`,
+    "and after imputation, the median is", `r md2`)
+
+Imputataion affected the median (lowered it) but had no impact on the mean
+
+Now I examine difference in activity between weekedays and weekends
+
+First I create new factor variable for weekend and weekday dates
+
+```{r}
+dat2$wknd <- as.factor(ifelse(weekdays(dat2$date) %in% c("Saturday","Sunday"),
+                              "Weekend","Weekday")) 
+```
+
+Here is a panel plot comparing the total steps taken on the weekend vs. weekdays
+
+```{r}
+dat3 <- ddply(dat2, c("wknd", "interval"), summarise,
+              total_steps = sum(steps))
+
+xyplot(total_steps~interval|wknd,dat3,type='l', cex = 0.3, layout = c(1, 2),
+       xlab = 'Interval', ylab = 'Total Steps',
+       main = "Total steps by interval by weekday type")
+```
